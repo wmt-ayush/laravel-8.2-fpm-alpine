@@ -71,7 +71,7 @@ ADD default.conf /etc/nginx/conf.d/
 ADD nginx.conf /etc/nginx/
 
 # Set working directory
-WORKDIR /var/www/html
+WORKDIR /var/www/
 
 # Set the default command to start supervisord
 CMD ["/usr/bin/supervisord"]

@@ -1,17 +1,22 @@
-FROM php:8.0-fpm-alpine3.16
+# Use PHP 8.2 with Alpine 3.16 base image
+FROM php:8.2-fpm-alpine3.16
 
-# Essentials
+LABEL Maintainer="Ayush Chaturvedi <ayushc@webmobtech.com>" \
+      Description="Nginx + PHP8.2-FPM-Alpine Based on Ubuntu 22.04."
+
+# Set timezone to UTC
 RUN echo "UTC" > /etc/timezone
+
+# Install essential packages
 RUN apk add --no-cache zip unzip openrc curl nano sqlite nginx supervisor
 
-
-# Add Repositories
-RUN rm -f /etc/apk/repositories &&\
+# Add Alpine repositories (main and community)
+RUN rm -f /etc/apk/repositories && \
     echo "http://dl-cdn.alpinelinux.org/alpine/v3.16/main" >> /etc/apk/repositories && \
     echo "http://dl-cdn.alpinelinux.org/alpine/v3.16/community" >> /etc/apk/repositories
 
-# Add Build Dependencies
-RUN apk add --no-cache --virtual .build-deps  \
+# Install build dependencies for PHP extensions
+RUN apk add --no-cache --virtual .build-deps \
     zlib-dev \
     libjpeg-turbo-dev \
     libpng-dev \
@@ -19,36 +24,31 @@ RUN apk add --no-cache --virtual .build-deps  \
     bzip2-dev \
     libzip-dev
 
-
-# Add Production Dependencies
+# Install PHP 8.2 production dependencies
 RUN apk add --update --no-cache --virtual \
-    php8-mbstring \
-    php8-fpm \
-    php8-mysqli \
-    php8-opcache \
-    # php8-pecl-redis \
-    php8-phar \
-    php8-xml \
-    # php8-xmlreader \
-    php8-zip \
-    php8-zlib \
-    php8-pdo \
-    # php8-xmlwriter \
-    php8-tokenizer \
-    php8-session \
-    php8-pdo_mysql \
-    php8-pdo_sqlite \
+    php8.2-mbstring \
+    php8.2-fpm \
+    php8.2-mysqli \
+    php8.2-opcache \
+    php8.2-phar \
+    php8.2-xml \
+    php8.2-zip \
+    php8.2-zlib \
+    php8.2-pdo \
+    php8.2-tokenizer \
+    php8.2-session \
+    php8.2-pdo_mysql \
+    php8.2-pdo_sqlite \
     mysql-client \
     dcron \
     jpegoptim \
     pngquant \
     optipng \
     icu-dev \
-    freetype-dev 
+    freetype-dev
 
-# Configure & Install Extension
-RUN docker-php-ext-configure \
-    opcache --enable-opcache &&\
+# Configure and install PHP extensions
+RUN docker-php-ext-configure opcache --enable-opcache && \
     docker-php-ext-configure gd --with-jpeg=/usr/include/ --with-freetype=/usr/include/ && \
     docker-php-ext-configure zip && \
     docker-php-ext-install \
@@ -64,28 +64,31 @@ RUN docker-php-ext-configure \
     pcntl \
     bcmath
 
-# Install modules
+# Check installed PHP modules
 RUN php -m
 
-
-# Add Composer
+# Install Composer
 RUN curl -s https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin/ --filename=composer
-#RUN composer global require hirak/prestissimo
+
+# Set Composer environment variable and PATH
 ENV COMPOSER_ALLOW_SUPERUSER=1
 ENV PATH="./vendor/bin:$PATH"
 
+# Copy custom PHP configurations
 COPY opcache.ini $PHP_INI_DIR/conf.d/
 COPY php.ini $PHP_INI_DIR/conf.d/
 
-# Setup Crond and Supervisor by default
-RUN echo '*  *  *  *  * /usr/local/bin/php  /var/www/artisan schedule:run >> /dev/null 2>&1' > /etc/crontabs/root && mkdir /etc/supervisor.d
+# Set up Cron and Supervisor by default
+RUN echo '*  *  *  *  * /usr/local/bin/php /var/www/artisan schedule:run >> /dev/null 2>&1' > /etc/crontabs/root && mkdir /etc/supervisor.d
 ADD master.ini /etc/supervisor.d/
 ADD default.conf /etc/nginx/conf.d/
 ADD nginx.conf /etc/nginx/
 
-# Remove Build Dependencies
+# Remove build dependencies to reduce image size
 RUN apk del -f .build-deps
-# Setup Working Dir
+
+# Set working directory
 WORKDIR /var/www/html
 
+# Set the default command to start supervisord
 CMD ["/usr/bin/supervisord"]

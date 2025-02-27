@@ -1,8 +1,5 @@
-# Use PHP 8.2 with Alpine 3.16 base image
-FROM php:8.2-fpm-alpine3.16
-
-LABEL Maintainer="Ayush Chaturvedi <ayushc@webmobtech.com>" \
-      Description="Nginx + PHP8.2-FPM-Alpine Based on Ubuntu 22.04."
+# Use PHP 8.2 with Alpine base image
+FROM php:8.2-fpm-alpine
 
 # Set timezone to UTC
 RUN echo "UTC" > /etc/timezone
@@ -10,56 +7,45 @@ RUN echo "UTC" > /etc/timezone
 # Install essential packages
 RUN apk add --no-cache zip unzip openrc curl nano sqlite nginx supervisor
 
-# Add Alpine repositories (main and community)
+# Add Alpine repositories
 RUN rm -f /etc/apk/repositories && \
-    echo "http://dl-cdn.alpinelinux.org/alpine/v3.16/main" >> /etc/apk/repositories && \
-    echo "http://dl-cdn.alpinelinux.org/alpine/v3.16/community" >> /etc/apk/repositories
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.18/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.18/community" >> /etc/apk/repositories
 
-# Install build dependencies for PHP extensions
-RUN apk add --no-cache --virtual .build-deps \
+# Install build dependencies and required packages for PHP extensions
+RUN apk update && apk upgrade && apk add --no-cache \
+    linux-headers \
     zlib-dev \
     libjpeg-turbo-dev \
     libpng-dev \
     libxml2-dev \
     bzip2-dev \
-    libzip-dev
-
-# Install PHP 8.2 production dependencies
-RUN apk add --update --no-cache --virtual \
-    php8.2-mbstring \
-    php8.2-fpm \
-    php8.2-mysqli \
-    php8.2-opcache \
-    php8.2-phar \
-    php8.2-xml \
-    php8.2-zip \
-    php8.2-zlib \
-    php8.2-pdo \
-    php8.2-tokenizer \
-    php8.2-session \
-    php8.2-pdo_mysql \
-    php8.2-pdo_sqlite \
+    libzip-dev \
+    icu-dev \
+    freetype-dev \
     mysql-client \
     dcron \
     jpegoptim \
     pngquant \
     optipng \
-    icu-dev \
-    freetype-dev
+    oniguruma-dev
 
-# Configure and install PHP extensions
+# Configure PHP extensions
 RUN docker-php-ext-configure opcache --enable-opcache && \
     docker-php-ext-configure gd --with-jpeg=/usr/include/ --with-freetype=/usr/include/ && \
-    docker-php-ext-configure zip && \
-    docker-php-ext-install \
-    opcache \
+    docker-php-ext-configure zip
+
+# Install PHP extensions (only once)
+RUN docker-php-ext-install \
     mysqli \
     pdo \
     pdo_mysql \
+    zip \
+    opcache \
+    xml \
     sockets \
     intl \
     gd \
-    xml \
     bz2 \
     pcntl \
     bcmath
@@ -83,9 +69,6 @@ RUN echo '*  *  *  *  * /usr/local/bin/php /var/www/artisan schedule:run >> /dev
 ADD master.ini /etc/supervisor.d/
 ADD default.conf /etc/nginx/conf.d/
 ADD nginx.conf /etc/nginx/
-
-# Remove build dependencies to reduce image size
-RUN apk del -f .build-deps
 
 # Set working directory
 WORKDIR /var/www/html
